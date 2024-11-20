@@ -5,10 +5,8 @@ from scipy import ndimage
 from skimage import restoration
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import to_rgba, to_rgb
 import pyfftw
 import multiprocessing
-from scipy import signal, ndimage, interpolate
 from cycler import cycler
 import tqdm
 import time
@@ -16,18 +14,13 @@ import cv2
 import os
 import regex as re
 import velocity
-import matplotlib.colors as colors
 import pickle
 import faulthandler
 import scipy.optimize as opt
-from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
-from skimage.feature import peak_local_max
 from skimage.restoration import unwrap_phase
 from scipy.integrate import solve_ivp
 from scipy import optimize
-import time
-
 
 # from findpeaks import findpeaks
 
@@ -1783,7 +1776,7 @@ if __name__ == "__main__":
     print(f"\nScan: {scan} \n")
     # compute_phase_time(scan, plot=True)
     # compute_n2_Isat(scan, plot=False)
-    # compute_final_xi(scan, plot=True)
+    compute_final_xi(scan, plot=True)
 
     # plot_fields(scan, window=15, plot=False)
     # energy_time(scan, plot=False)
@@ -1792,4 +1785,4 @@ if __name__ == "__main__":
     # normalized_velocity(scan, plot=True)
     # trajectory_fit(scan, start=3, windows_size=12.5, t0_end=130, plot=True)
     # KPC_compute(scan, plot=True)
-    spectral_analysis(scan, which="vortex", img_nbr=4, plot=True, debug=True)
+    # spectral_analysis(scan, which="vortex", img_nbr=4, plot=True, debug=True)
