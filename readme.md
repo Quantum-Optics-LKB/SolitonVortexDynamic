@@ -1,7 +1,8 @@
 ## Dynamics of interacting quantum vortices in a paraxial fluid of light
 
-Processing codes:
-- vortex_collision_processing.py to treat the data (zenodo)
-- simu_z.py to do simulation
+Download the data on Zenodo: link
 
-To be updated when the article will be submitted (tuorial and how to)...
+Codes:
+- contrast.py contains all image density and phase extraction
+- velocity.py to extract information from fields array
+- vortex_collision_processing.py to run the treatement

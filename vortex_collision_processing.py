@@ -233,7 +233,7 @@ def compute_phase_time(scan: str, plot: bool = False):
     t = time.perf_counter() - t0
     sz = field_ref.nbytes + field.nbytes + field_vortex.nbytes + taus.nbytes
     rate = sz / t
-    print(f"Saved {sz*1e-6:.0f} MB of data in {t:.2f} s / {rate*1e-6:.2f} MB/s")
+    print(f"Saved {sz * 1e-6:.0f} MB of data in {t:.2f} s / {rate * 1e-6:.2f} MB/s")
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     ax[0].imshow(np.abs(field[0, -1, :, :]) ** 2)
     ax[1].imshow(np.angle(field[0, -1, :, :]), cmap="twilight_shifted")
@@ -303,7 +303,7 @@ def compute_final_xi(scan: str, plot: bool = False):
     t = time.perf_counter() - t0
     sz = fields_ref.nbytes + fields.nbytes
     rate = sz / t
-    print(f"Loaded {sz*1e-6:.0f} MB of data in {t:.2f} s / {rate*1e-6:.2f} MB/s")
+    print(f"Loaded {sz * 1e-6:.0f} MB of data in {t:.2f} s / {rate * 1e-6:.2f} MB/s")
     window_m = 30
     vort_size = []
     vort_size_err = []
@@ -435,7 +435,7 @@ def plot_fields(scan: str, window: int = 50, plot: bool = False):
     field_ref = field_ref[:, -1, :, :]
     rate = sz / t
     # if field_ref.shape[-1] == Nx // 2:
-    print(f"Loaded {sz*1e-6:.0f} MB of data in {t:.2f} s / {rate*1e-6:.2f} MB/s")
+    print(f"Loaded {sz * 1e-6:.0f} MB of data in {t:.2f} s / {rate * 1e-6:.2f} MB/s")
     delta_n = taus / (k0 * L)
     # xis = 1 / (k0 * np.sqrt(delta_n))
     xis = np.load(f"{scan}/xis_final.npy")
@@ -494,7 +494,7 @@ def plot_fields(scan: str, window: int = 50, plot: bool = False):
         (mat.shape[1], mat.shape[0]),
     )
     for i in tqdm.tqdm(range(field.shape[0]), desc="Plotting fields", position=1):
-        fig.suptitle(rf"$\tau$ = {taus[i]:.0f} / $\xi$ = {xis[i]*1e6:.0f} $\mu m$")
+        fig.suptitle(rf"$\tau$ = {taus[i]:.0f} / $\xi$ = {xis[i] * 1e6:.0f} $\mu m$")
         ext_real = [
             -field.shape[-1] * d_real / (2 * xis[i]),
             field.shape[-1] * d_real / (2 * xis[i]),
@@ -562,7 +562,7 @@ def energy_time(scan: str, plot: bool = False):
 
     sz = field_ref.nbytes + field.nbytes + field_vortex.nbytes
     rate = sz / t
-    print(f"Loaded {sz*1e-6:.0f} MB of data in {t:.2f} s / {rate*1e-6:.2f} MB/s")
+    print(f"Loaded {sz * 1e-6:.0f} MB of data in {t:.2f} s / {rate * 1e-6:.2f} MB/s")
     filtering_radius = 4
     # field = ndimage.gaussian_filter(field, filtering_radius)
     # field_vortex = ndimage.gaussian_filter(field_vortex, filtering_radius)
@@ -699,7 +699,7 @@ def energy_time(scan: str, plot: bool = False):
         + u_comp_vortex.nbytes
     )
     rate = sz / t
-    print(f"Saved {sz*1e-6:.0f} MB of data in {t:.2f} s / {rate*1e-6:.2f} MB/s")
+    print(f"Saved {sz * 1e-6:.0f} MB of data in {t:.2f} s / {rate * 1e-6:.2f} MB/s")
     fig, ax = plt.subplots(1, 3, figsize=(15, 5))
     ax[0].set_title(r"$E_{two}$")
     ax[0].errorbar(
@@ -971,7 +971,7 @@ def normalized_velocity(scan: str, plot: bool = False):
     sz = fields_ref.nbytes + fields.nbytes
     rate = sz / t
     expo = 2
-    print(f"Loaded {sz*1e-6:.0f} MB of data in {t:.2f} s / {rate*1e-6:.2f} MB/s")
+    print(f"Loaded {sz * 1e-6:.0f} MB of data in {t:.2f} s / {rate * 1e-6:.2f} MB/s")
 
     qs_velo = []
     qs_velo_err = []
@@ -1198,7 +1198,7 @@ def trajectory_fit(
     t = time.perf_counter() - t0
     sz = fields_ref.nbytes + fields.nbytes
     rate = sz / t
-    print(f"Loaded {sz*1e-6:.0f} MB of data in {t:.2f} s / {rate*1e-6:.2f} MB/s")
+    print(f"Loaded {sz * 1e-6:.0f} MB of data in {t:.2f} s / {rate * 1e-6:.2f} MB/s")
 
     size_norms = []
     qs_pos = []
@@ -1611,7 +1611,7 @@ def velocity_map(scan: str, idx_array=np.array([2, 23, 38]), plot: bool = False)
 
         if plot:
             fig, ax = plt.subplots(1, 3, figsize=[12, 3])
-            fig.suptitle(rf"$\tau$ = {taus[i]:.0f} / $\xi$ = {xi*1e6:.0f} $\mu m$")
+            fig.suptitle(rf"$\tau$ = {taus[i]:.0f} / $\xi$ = {xi * 1e6:.0f} $\mu m$")
             # flows are calculated by streamplot
             im0 = ax[0].imshow(flow_comp, cmap="viridis", vmin=0, vmax=1)
             ax[0].streamplot(
@@ -1768,20 +1768,24 @@ def KPC_compute(scan, plot):
 # %% Manual data processing
 
 if __name__ == "__main__":
-    # scan = "Data/07191910_dipole_time" # Images and velocity map
-    # scan = "Data/09061956_dipole_time" # Mach number
-    # scan = "Data/09101636_dipole_time"  # Trajectory
-    scan = "Data/spectral_analysis"  # Spectral analysis
+    scan_fig1 = "Data/07191910_dipole_time"  # datas of Fig1
+    scan_fig2 = "Data/09061956_dipole_time"  # datas of Fig2
+    scan_fig3 = "Data/09101636_dipole_time"  # datas of Fig3
+    scan_fig4 = "Data/spectral_analysis"  # datas of Fig4
 
-    print(f"\nScan: {scan} \n")
+    ### Compute the field from raw images, compute parameters
     # compute_phase_time(scan, plot=True)
-    # compute_n2_Isat(scan, plot=False)
-    compute_final_xi(scan, plot=True)
 
+    ### Compute system parameters
+    # compute_n2_Isat(scan, plot=False)
+    # compute_final_xi(scan, plot=True)
+
+    ### plot the fields, energy or velocity and generate an mp4
     # plot_fields(scan, window=15, plot=False)
     # energy_time(scan, plot=False)
     # velocity_map(scan, plot=True)
 
+    ### compute the quasi-soliton velocity, trajectory and velocity correlation
     # normalized_velocity(scan, plot=True)
     # trajectory_fit(scan, start=3, windows_size=12.5, t0_end=130, plot=True)
     # KPC_compute(scan, plot=True)
