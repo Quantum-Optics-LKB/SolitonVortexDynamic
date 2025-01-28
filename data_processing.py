@@ -128,6 +128,57 @@ def Soliton1D(x, Mach, xi):
     return Phase
 
 
+def JRS_2D_ansatz(x, Mach, xi):
+    c = np.sqrt(2) * np.sqrt(1 - Mach)
+    denominator = 3 / 2 + c**2 * x**2 / xi**2
+    fin = -2 * np.sqrt(2) * c * x / xi / denominator
+    return fin.ravel()
+
+
+def JRS_padé(x, y):
+    """
+    Compute the density of the rarefaction pulse at U = 0.5.
+
+    Parameters:
+    x (float or np.ndarray): x-coordinate(s).
+    y (float or np.ndarray): y-coordinate(s).
+
+    Returns:
+    float or np.ndarray: Density rho(x, y).
+    """
+    # Numerator coefficients for u and v
+    a00 = -0.825937
+    a10 = -0.114393
+    a01 = -0.0271467
+
+    b00 = -0.737901
+    b10 = -0.108587
+    b01 = -0.0542934
+
+    # Denominator coefficients (common to both u and v)
+    c10 = 0.37355
+    c01 = 0.14235
+    c20 = 0.03495
+    c11 = 0.03495
+    c02 = 0.008737
+
+    # Compute u(x, y)
+    u_num = a00 + a10 * x**2 + a01 * y**2
+    u_den = 1 + c10 * x**2 + c01 * y**2 + c20 * x**4 + c11 * x**2 * y**2 + c02 * y**4
+    u = 1 + u_num / u_den
+
+    # Compute v(x, y)
+    v_num = x * (b00 + b10 * x**2 + b01 * y**2)
+    v = v_num / u_den  # Note: same denominator as u
+
+    # Compute density rho(x, y)
+    rho = u**2 + v**2
+    psi = u + 1j * v
+    rho = np.abs(psi) ** 2
+    phase = np.angle(psi)
+    return rho, phase
+
+
 def natural_sort(l):
     def convert(text):
         return int(text) if text.isdigit() else text.lower()
@@ -955,9 +1006,9 @@ def spectral_analysis(
         np.save(f"{scan}/{which}/kx.npy", kx)
 
 
-def normalized_velocity(scan: str, plot: bool = False):
-    """Find the position of the quasi-soliton and compute its normalized energy
-    by fitting the phase profile with the 1D soliton solution.
+def JRS_velocity(scan: str, debug: bool = False, plot: bool = False):
+    """Find the position of the quasi-soliton and compute its velocity
+    by fitting the phase profile along the x-axis.
     """
     print("Loading data ...")
     t0 = time.perf_counter()
@@ -965,6 +1016,9 @@ def normalized_velocity(scan: str, plot: bool = False):
     fields = np.load(f"{scan}/field.npy")
     fields_vortex = np.load(f"{scan}/field_vortex.npy")
     u_inc = np.load(f"{scan}/u_inc.npy")
+    qs_velo = np.load(f"{scan}/qs_velo.npy")
+    JRS_index = np.where(qs_velo > 0.61)
+    print("\n", JRS_index, "\n")
     taus = np.load(f"{scan}/taus.npy")
     xis = np.load(f"{scan}/xis_final.npy")
     t = time.perf_counter() - t0
@@ -975,11 +1029,16 @@ def normalized_velocity(scan: str, plot: bool = False):
 
     qs_velo = []
     qs_velo_err = []
+    qs_velo_2 = []
+    qs_velo_2_err = []
     marker = []
+    marker_2 = []
     for i in tqdm.tqdm(range(fields.shape[0]), desc="Plotting", position=1):
         marker_s = 0
         qs_velo_avg = []
+        qs_velo_avg_2 = []
         for j in range(fields.shape[1]):
+            # for j in np.array([3]):
             field = fields[i, j, :, :]
             if 0 in fields[i, j, :, :]:
                 field = fields[i, j - 1, :, :]
@@ -1023,7 +1082,7 @@ def normalized_velocity(scan: str, plot: bool = False):
             radius_mask_ref = np.sqrt(np.sum(mask_fluid) / np.pi)
             window = int(radius_mask_ref) / 1.5
 
-            # Find qs position
+            # Find qs position with the peak of incompressible energy
             inc = (np.abs(u_inc[i, :, :, :, :]) ** 2).sum(axis=-3).mean(axis=0)
             inc /= np.nanmax(inc)
             # plt.figure()
@@ -1035,8 +1094,7 @@ def normalized_velocity(scan: str, plot: bool = False):
             # print('\n', center_x, center_y, '\n')
             # End qs position
 
-            w = 7.5
-            # xi = np.sqrt(0.2/(taus[i]*8e6))
+            w = 6
             xi = xis[i]
             ww = int(w * xi / d_real)
             size_norm = d_real / xi
@@ -1057,13 +1115,7 @@ def normalized_velocity(scan: str, plot: bool = False):
                 int(center_x - ww) : int(center_x + ww),
             ]
             center = (rho_zoom0.shape[0] // 2, rho_zoom0.shape[0] // 2)
-
-            # rho_zoom0 = np.abs(rho_zoom0)**2
-            # rho_ref_zoom0 = np.abs(rho_ref_zoom0)**2
-            # drho = rho_zoom0 - rho_ref_zoom0 + 1
             drho = np.abs(rho_zoom0)
-            # drho = (rho_ref_zoom0 - rho_zoom0)
-            # drho[drho < 0.4] = 0
 
             vortices = np.array([])
             vort = velocity.vortex_detection(phi_jrs_flat, plot=False, r=1)
@@ -1086,77 +1138,165 @@ def normalized_velocity(scan: str, plot: bool = False):
                 if veloo > 1:
                     veloo = np.nan
                 qs_velo_avg += [veloo]
-                marker_s = "s"
+                qs_velo_avg_2 += [veloo]
+                marker_h = "s"
+                marker_d = "s"
             else:
                 phi_zoom1 = phi_zoom0.copy()
-                # phase_jrs = phi_zoom1[phi_zoom1.shape[0]//2,phi_zoom1.shape[0]//2-pxx:phi_zoom1.shape[0]//2+pxx]
-                # phase_jrs = np.mean(phi_zoom1[phi_zoom1.shape[0]//2-2:phi_zoom1.shape[0]//2+2,phi_zoom1.shape[0]//2-pxx:phi_zoom1.shape[0]//2+pxx], axis=0)
+                max_val = np.max(phi_zoom1)
+                min_val = np.min(phi_zoom1)
+                dist = (max_val - min_val) / 2
+                phi_zoom1 = phi_zoom1 - max_val + dist
+
                 phase_jrs = np.mean(
                     phi_zoom1[
                         phi_zoom1.shape[0] // 2 - 2 : phi_zoom1.shape[0] // 2 + 2, :
                     ],
                     axis=0,
                 )
-                phase_jrs += np.pi
-                x_zoom = np.linspace(-ww, ww, 2 * ww) * size_norm
+                x_zoom = np.linspace(-w, w, len(phase_jrs))
+                y_zoom = np.linspace(-w, w, len(phase_jrs))
+                x_fit = np.linspace(-10, 10, len(phase_jrs))
+                X, Y = np.meshgrid(x_zoom, y_zoom)
+                popt, pcov = curve_fit(JRS_2D_ansatz, x_zoom, phase_jrs, p0=[0.6, 1])
                 popt1, pcov1 = curve_fit(Soliton1D, x_zoom, phase_jrs, p0=[0.6, 1])
-                # plt.figure(12122)
-                # plt.plot(x_zoom, phase_jrs, marker="o", label="Phase")
-                # plt.plot(
-                #     x_zoom,
-                #     Soliton1D(x_zoom, *popt1) - np.pi / 2,
-                #     label=f"v/cs = {popt1[0]:.2f}",
+                v_s_1D = popt[0] - (popt[0] - 1) ** 2 / (popt[0] - 2)
+                rho_pade, jrs_pade = JRS_padé(X, Y)
+                jrs_pade = np.mean(
+                    jrs_pade[
+                        jrs_pade.shape[0] // 2 - 2 : jrs_pade.shape[0] // 2 + 2, :
+                    ],
+                    axis=0,
+                )
+                # if debug:
+                #     extent = [-w, w, -w, w]
+                # fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+                # fig.suptitle(f"T = {taus[i]:.2f}")
+                # im0 = ax[0].imshow(rho_zoom0, cmap="gray", extent=extent)
+                # ax[0].set_title(r"$\sqrt{\rho}$")
+                # ax[0].set_xlabel(r"$x/\xi$")
+                # ax[0].set_ylabel(r"$y/\xi$")
+                # fig.colorbar(im0, ax=ax[0], label="Amplitude")
+                # im1 = ax[1].imshow(
+                #     phi_zoom1,
+                #     cmap="twilight_shifted",
+                #     extent=extent,
+                #     vmin=-np.pi,
+                #     vmax=np.pi,
                 # )
-                # plt.xlabel(r"$x/\xi$")
-                # plt.ylabel(r"$\phi$")
-                # plt.ylim(0, 2 * np.pi)
-                # plt.legend()
-                # # plt.grid()
+                # ax[1].set_title(r"$\phi-\phi_0$")
+                # ax[1].set_xlabel(r"$x/\xi$")
+                # ax[1].set_ylabel(r"$y/\xi$")
+                # cbar = fig.colorbar(
+                #     im1, ax=ax[1], label=r"$\phi/\phi_0$ in rad", shrink=0.6
+                # )
+                # cbar.set_ticks(
+                #     [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi],
+                #     labels=[
+                #         r"$\pi$",
+                #         r"$-\frac{\pi}{2}$",
+                #         r"$0$",
+                #         r"$\frac{\pi}{2}$",
+                #         r"$\pi$",
+                #     ],
+                # )
                 # plt.show()
-                qs_velo_avg += [popt1[0]]
-                marker_s = "o"
 
-            # if i==23:
-            #     extent = [-w, w, -w, w]
-            #     # drhoo = (drho // 0.1) * 0.1
-            #     extent = [-w, w, -w, w]
-            #     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-            #     fig.suptitle(f"tau = {taus[i]:.1f}")
-            #     im0 = ax[0].imshow(drho, cmap='gray', extent=extent, interpolation='none', vmin=0, vmax=1)
-            #     fig.colorbar(im0, ax=ax[0], label=r"$\rho$", shrink=0.6)
-            #     im0.set_clim(0, 1)
-            #     ax[0].set_xlabel(r'$x/\xi$')
-            #     ax[0].set_ylabel(r'$y/\xi$')
-            #     ax[0].set_title('Density')
-            #     im1 = ax[1].imshow(phi_zoom0, cmap='twilight_shifted', extent=extent, interpolation='none')
-            #     fig.colorbar(im1, ax=ax[1], label=r"$\phi$", shrink=0.6)
-            #     im1.set_clim(-np.pi, np.pi)
-            #     ax[1].set_xlabel(r'$x/\xi$')
-            #     ax[1].set_ylabel(r'$y/\xi$')
-            #     ax[1].set_title('Phase')
-            #     plt.show()
-            #     plt.figure()
-            #     alpha = np.mean(drho[:, drho.shape[0]//2-2:drho.shape[0]//2+2], axis=1)
-            #     beta = np.mean(drho[drho.shape[0]//2-2:drho.shape[0]//2+2, :], axis=0)
-            #     x_shape = np.linspace(-w, w, len(alpha))
-            #     plt.plot(x_shape, beta, color='tab:red', label='x')
-            #     plt.plot(x_shape, alpha, color='tab:blue', label='y')
-            #     plt.ylim(0, 1)
-            #     plt.show()
+                # x, y = np.meshgrid(
+                #     np.linspace(-w, w, len(jrs_pade)),
+                #     np.linspace(-w, w, len(jrs_pade)),
+                # )
+                # X, Y = np.meshgrid(x_zoom, y_zoom)
+                # v_tot_zoom0 = v_tot.copy()
+                # v_tot_zoom0[0] = v_tot_zoom0[0][
+                #     int(center_y - ww) : int(center_y + ww),
+                #     int(center_x - ww) : int(center_x + ww),
+                # ]
+                # v_tot_zoom0[1] = v_tot_zoom0[1][
+                #     int(center_y - ww) : int(center_y + ww),
+                #     int(center_x - ww) : int(center_x + ww),
+                # ]
+                # plt.figure()
+                # plt.imshow(
+                #     phi_zoom1,
+                #     cmap="twilight_shifted",
+                #     extent=extent,
+                #     vmin=-np.pi,
+                #     vmax=np.pi,
+                # )
+                # plt.streamplot(
+                #     X,
+                #     Y,
+                #     v_tot_zoom0[1],
+                #     v_tot_zoom0[0],
+                #     color="white",
+                #     density=0.65,
+                #     linewidth=1,
+                # )
+                # plt.show()
+
+                # plt.figure(figsize=(2, 2))
+                # plt.plot(x_fit, phase_jrs, label="Data", marker="o")
+                # plt.plot(
+                #     x_fit,
+                #     JRS_1D_ansatz(x_zoom, *popt),
+                #     label=f"Tsuchiya: v/c={v_s_1D:.2f}",
+                # )
+                # plt.plot(
+                #     x_fit,
+                #     Soliton1D(x_zoom, *popt1),
+                #     label=f"Soliton: v/c={popt1[0]:.2f}",
+                # )
+                # plt.plot(x_fit, jrs_pade, label="Padé: v/c=0.7")
+                # plt.ylim(-np.pi / 2, np.pi / 2)
+                # plt.legend()
+                # plt.show()
+
+                # x = np.arange(phi_zoom1.shape[1])
+                # y = np.arange(phi_zoom1.shape[0])
+                # X, Y = np.meshgrid(x, y)
+                # inital_guess = (0, 0, 0.6, 1)
+                # try:
+                #     popt1, pcov1 = opt.curve_fit(
+                #         JRS_ansatz, (Y, X), phi_zoom1.ravel(), p0=inital_guess
+                #     )
+                # except RuntimeError:
+                #     popt1 = np.array([ww, ww, np.nan, np.nan])
+                # v_shanks = popt1[2]
+                # v_shanks = popt1[2] - ((popt1[2] - 1) ** 2 / (popt1[2] - 2))
+                # jrs_reshape = JRS_ansatz((Y, X), *popt1).reshape(ww * 2, ww * 2)
+                qs_velo_avg_2 += [v_s_1D]
+                qs_velo_avg += [popt1[0]]
+
+                marker_h = "^"
+                marker_d = "v"
 
         qs_velo_avg = np.array(qs_velo_avg)
-        marker += [marker_s]
+        qs_velo_avg_2 = np.array(qs_velo_avg_2)
+        marker += [marker_h]
+        marker_2 += [marker_d]
         qs_velo += [np.nanmean(qs_velo_avg)]
         qs_velo_err += [np.nanstd(qs_velo_avg)]
+        qs_velo_2 += [np.nanmean(qs_velo_avg_2)]
+        qs_velo_2_err += [np.nanstd(qs_velo_avg_2)]
 
     qs_velo = np.array(qs_velo)
     qs_velo_err = np.array(qs_velo_err)
+    qs_velo_2 = np.array(qs_velo_2)
+    qs_velo_2_err = np.array(qs_velo_2_err)
     marker = np.array(marker)
-    np.save(f"{scan}/qs_velo.npy", qs_velo)
+    marker_2 = np.array(marker_2)
+    # np.save(f"{scan}/qs_velo.npy", qs_velo)
+    # np.save(f"{scan}/qs_velo_err.npy", qs_velo_err)
+    # np.save(f"{scan}/qs_velo_2.npy", qs_velo_2)
+    # np.save(f"{scan}/qs_velo_2_err.npy", qs_velo_2_err)
+    # np.save(f"{scan}/marker.npy", marker)
+    # np.save(f"{scan}/marker_2.npy", marker_2)
 
     if plot:
         plt.figure(figsize=(3.5, 5))
         plt.plot(taus, qs_velo, color="tab:blue")
+        plt.plot(taus, qs_velo_2, color="tab:orange")
         for i in range(len(marker)):
             plt.errorbar(
                 taus[i],
@@ -1167,12 +1307,22 @@ def normalized_velocity(scan: str, plot: bool = False):
                 markerfacecolor="lightsteelblue",
                 ecolor="tab:blue",
             )
+            plt.errorbar(
+                taus[i],
+                qs_velo_2[i],
+                qs_velo_2_err[i],
+                marker=marker_2[i],
+                markeredgecolor="tab:orange",
+                markerfacecolor="navajowhite",
+                ecolor="tab:orange",
+            )
         plt.xlabel(r"$\tau$")
         plt.ylabel(r"$v/c_s$")
         plt.ylim(0, 1)
-        plt.axhline(0.61, color="red", linestyle="--")
+        plt.axhline(0.61, color="grey", linestyle="--")
+        plt.axhline(0.7, color="tab:green", linestyle="--")
         plt.grid()
-        plt.savefig(f"{scan}/jrs_mach.svg", dpi=300)
+        # plt.savefig(f"{scan}/jrs_mach.svg", dpi=300)
         plt.show()
 
     return qs_velo
@@ -1645,7 +1795,6 @@ def velocity_map(scan: str, idx_array=np.array([2, 23, 38]), plot: bool = False)
 
 
 def KPC_compute(scan, plot):
-    """Compute JRS shape and compare to KP condition."""
     fields = np.load(f"{scan}/field.npy")
     fields_ref = np.load(f"{scan}/field_ref.npy")
     taus = np.load(f"{scan}/taus.npy")
@@ -1729,39 +1878,31 @@ def KPC_compute(scan, plot):
     np.save(f"{scan}/x_length_err.npy", x_length_err)
     np.save(f"{scan}/y_length_err.npy", y_length_err)
 
-    eps = np.sqrt(1 - qs_velo[JRS_index])
+    eps = np.sqrt(2) * np.sqrt(1 - (qs_velo[JRS_index]))
     x_kpc = 1 / eps
-    y_kpc = 3 / eps**2
-    # Calculer l'erreur absolue moyenne en pourcentage (MAPE)
-    width_error_pct = np.mean(np.abs((x_length - x_kpc) / x_length)) * 100
-    length_error_pct = np.mean(np.abs((y_length - y_kpc) / y_length)) * 100
-    print("\n", f"Width error: {width_error_pct:.2f} %")
-    print("\n", f"Length error: {length_error_pct:.2f} %")
+    y_kpc = 1 / eps**2
+
+    a = x_length / x_kpc
+    b = y_length / y_kpc
 
     plt.figure()
-    plt.plot(taus[JRS_index], x_length, marker="o", label="Width")
-    plt.fill_between(
+    plt.plot(
         taus[JRS_index],
-        x_length - x_length_err,
-        x_length + x_length_err,
-        alpha=0.4,
+        a,
+        marker="o",
+        label=r"$\epsilon\Delta x=$" f"{np.mean(a):.1f}",
     )
-    plt.plot(taus[JRS_index], y_length, marker="o", label="Length")
-    plt.fill_between(
+    plt.plot(
         taus[JRS_index],
-        y_length - y_length_err,
-        y_length + y_length_err,
-        alpha=0.4,
+        b,
+        marker="o",
+        label=r"$\epsilon^2\Delta y=$" f"{np.mean(b):.1f}",
     )
-
-    plt.plot(taus[JRS_index], x_kpc, "--", color="tab:blue", label=r"$1/\epsilon$")
-    plt.plot(taus[JRS_index], y_kpc, "--", color="tab:orange", label=r"$3/\epsilon^2$")
-
     plt.xlabel(r"$\tau$")
-    plt.ylabel(r"Size in $\xi$ unit")
+    plt.ylabel(r"Size/K-P")
     plt.legend()
     plt.grid()
-    plt.savefig(f"{scan}/size_evolution.svg", dpi=300)
+    plt.ylim(-0.2, 10)
     plt.show()
 
 
@@ -1777,16 +1918,16 @@ if __name__ == "__main__":
     # compute_phase_time(scan, plot=True)
 
     ### Compute system parameters
-    # compute_n2_Isat(scan, plot=False)
-    # compute_final_xi(scan, plot=True)
+    # compute_n2_Isat(scan_fig1, plot=True)
+    # compute_final_xi(scan_fig1, plot=True)
 
     ### plot the fields, energy or velocity and generate an mp4
-    # plot_fields(scan, window=15, plot=False)
+    # plot_fields(scan_fig1, window=15, plot=False)
     # energy_time(scan, plot=False)
     # velocity_map(scan, plot=True)
 
     ### compute the quasi-soliton velocity, trajectory and velocity correlation
-    # normalized_velocity(scan, plot=True)
-    # trajectory_fit(scan, start=3, windows_size=12.5, t0_end=130, plot=True)
-    # KPC_compute(scan, plot=True)
-    # spectral_analysis(scan, which="vortex", img_nbr=4, plot=True, debug=True)
+    # JRS_velocity(scan_fig2, plot=True)
+    # KPC_compute(scan_fig2, plot=True)
+    # trajectory_fit(scan_fig3, start=3, windows_size=12.5, t0_end=130, plot=True)
+    # spectral_analysis(scan_fig4, which="vortex", img_nbr=4, plot=True, debug=True)
